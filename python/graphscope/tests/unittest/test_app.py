@@ -40,8 +40,15 @@ from graphscope import property_sssp
 from graphscope import sssp
 from graphscope import triangles
 from graphscope import wcc
+from graphscope import dump
 from graphscope.framework.app import AppAssets
 from graphscope.framework.errors import InvalidArgumentError
+from graphscope.dataset import load_ogbn_mag
+
+
+def test_dump(graphscope_session, ogbn_mag_small):
+    graph = load_ogbn_mag(graphscope_session, ogbn_mag_small)
+    property_dump(graph, "/tmp/dump_test", False)
 
 
 def test_create_app():
@@ -58,37 +65,74 @@ def test_create_app():
 def test_compatible_with_dynamic_graph(dynamic_property_graph):
     # bfs
     with pytest.raises(
-        InvalidArgumentError,
-        match="Not compatible for arrow_property dynamic_property type",
+            InvalidArgumentError,
+            match="Not compatible for arrow_property dynamic_property type",
     ):
         bfs(dynamic_property_graph, src=4)
 
 
+def test_errors_on_create_app(arrow_property_graph, arrow_project_graph):
+    # builtin-property app is incompatible with projected graph
+    with pytest.raises(graphscope.CompilationError):
+        a = AppAssets(algo="property_sssp", context="labeled_vertex_data")
+        pg = arrow_project_graph._project_to_simple()
+        a(pg, 4)
+
+    # builtin app is incompatible with property graph
+    with pytest.raises(graphscope.CompilationError):
+        a = AppAssets(algo="sssp", context="vertex_data")
+        a(arrow_property_graph, 4)
+
+    # algo not exist
+    with pytest.raises(
+            KeyError,
+            match="Algorithm does not exist in the gar resource",
+    ):
+        a = AppAssets(algo="invalid", context="vertex_data")
+        a(arrow_property_graph, 4)
+
+
+@pytest.mark.skipif(
+    os.environ.get("NETWORKX") != "ON", reason="dynamic graph is in NETWORKX ON"
+)
+def test_errors_on_create_app_with_dynamic(dynamic_project_graph):
+    with pytest.raises(graphscope.CompilationError):
+        a = AppAssets(algo="property_sssp", context="labeled_vertex_data")
+        a(dynamic_project_graph, 4)
+
+
+def test_error_on_non_graph():
+    eg1 = nx.Graph()  # networkx graph is unsupported
+    with pytest.raises(
+            InvalidArgumentError, match="Missing graph_type attribute in graph object"
+    ):
+        sssp(eg1, 4)
+
+
 def test_run_app_on_directed_graph(
-    p2p_project_directed_graph,
-    sssp_result,
-    pagerank_result,
-    hits_result,
-    bfs_result,
-    clustering_result,
-    dc_result,
-    ev_result,
-    katz_result,
+        p2p_project_directed_graph,
+        sssp_result,
+        pagerank_result,
+        bfs_result,
+        clustering_result,
+        dc_result,
+        ev_result,
+        katz_result,
 ):
     # sssp
     ctx1 = sssp(p2p_project_directed_graph, src=6)
     r1 = (
         ctx1.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=float)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=float)
     )
     r1[r1 == 1.7976931348623157e308] = float("inf")  # replace limit::max with inf
     assert np.allclose(r1, sssp_result["directed"])
     ctx2 = sssp(p2p_project_directed_graph, 6)
     r2 = (
         ctx2.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=float)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=float)
     )
     r2[r2 == 1.7976931348623157e308] = float("inf")  # replace limit::max with inf
     assert np.allclose(r2, sssp_result["directed"])
@@ -96,8 +140,8 @@ def test_run_app_on_directed_graph(
         ctx2.to_dataframe(
             {"node": "v.id", "r": "r"}, vertex_range={"begin": 1, "end": 4}
         )
-        .sort_values(by=["node"])
-        .to_numpy(),
+            .sort_values(by=["node"])
+            .to_numpy(),
         [[1.0, 260.0], [2.0, 229.0], [3.0, 310.0]],
     )
     assert np.allclose(
@@ -136,15 +180,15 @@ def test_run_app_on_directed_graph(
     ctx4 = bfs(p2p_project_directed_graph, src=6)
     r4 = (
         ctx4.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=int)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=int)
     )
     assert np.all(r4 == bfs_result["directed"])
     ctx5 = bfs(p2p_project_directed_graph, 6)
     r5 = (
         ctx5.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=int)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=int)
     )
     assert np.all(r5 == bfs_result["directed"])
     assert np.all(
@@ -163,7 +207,7 @@ def test_run_app_on_directed_graph(
     assert is_simple_path(p2p_project_directed_graph, [1, 10])
 
     with pytest.raises(
-        InvalidArgumentError, match="Louvain not support directed graph."
+            InvalidArgumentError, match="Louvain not support directed graph."
     ):
         louvain(p2p_project_directed_graph)
 
@@ -199,21 +243,21 @@ def test_run_app_on_directed_graph(
 
 
 def test_app_on_undirected_graph(
-    p2p_project_undirected_graph,
-    sssp_result,
-    pagerank_result,
-    bfs_result,
-    wcc_result,
-    cdlp_result,
-    triangles_result,
-    kshell_result,
+        p2p_project_undirected_graph,
+        sssp_result,
+        pagerank_result,
+        bfs_result,
+        wcc_result,
+        cdlp_result,
+        triangles_result,
+        kshell_result,
 ):
     # sssp
     ctx1 = sssp(p2p_project_undirected_graph, src=6)
     r1 = (
         ctx1.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=float)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=float)
     )
     r1[r1 == 1.7976931348623157e308] = float(
         "inf"
@@ -223,8 +267,8 @@ def test_app_on_undirected_graph(
         ctx1.to_dataframe(
             {"node": "v.id", "r": "r"}, vertex_range={"begin": 1, "end": 4}
         )
-        .sort_values(by=["node"])
-        .to_numpy(),
+            .sort_values(by=["node"])
+            .to_numpy(),
         [[1.0, 31.0], [2.0, 39.0], [3.0, 78.0]],
     )
     assert np.allclose(
@@ -236,15 +280,15 @@ def test_app_on_undirected_graph(
     ctx2 = pagerank(p2p_project_undirected_graph, delta=0.85, max_round=10)
     r2 = (
         ctx2.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=float)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=float)
     )
     assert np.allclose(r2, pagerank_result["undirected"])
     ctx3 = pagerank(p2p_project_undirected_graph, 0.85, 10)
     r3 = (
         ctx3.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=float)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=float)
     )
     assert np.allclose(r3, pagerank_result["undirected"])
     # r4 = pagerank(arrow_project_graph, 10, 0.85) # check max_round=10
@@ -252,23 +296,23 @@ def test_app_on_undirected_graph(
     ctx5 = pagerank(p2p_project_undirected_graph, "0.85", "10")
     r5 = (
         ctx5.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=float)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=float)
     )
     assert np.allclose(r5, pagerank_result["undirected"])
     ctx6 = pagerank(p2p_project_undirected_graph)
     r6 = (
         ctx6.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=float)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=float)
     )
     assert np.allclose(r6, pagerank_result["undirected"])
     assert np.allclose(
         ctx6.to_dataframe(
             {"node": "v.id", "r": "r"}, vertex_range={"begin": 1, "end": 4}
         )
-        .sort_values(by=["node"])
-        .to_numpy(),
+            .sort_values(by=["node"])
+            .to_numpy(),
         [
             [1.0, 6.153724343761569e-05],
             [2.0, 9.280361872165397e-05],
@@ -284,8 +328,8 @@ def test_app_on_undirected_graph(
     ctx7 = bfs(p2p_project_undirected_graph, src=6)
     r7 = (
         ctx7.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=int)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=int)
     )
     assert np.all(r7 == bfs_result["undirected"])
     assert np.all(
@@ -304,8 +348,8 @@ def test_app_on_undirected_graph(
     ctx8 = wcc(p2p_project_undirected_graph)
     r8 = (
         ctx8.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=int)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=int)
     )
     assert np.all(r8 == wcc_result)
     assert np.all(
@@ -322,8 +366,8 @@ def test_app_on_undirected_graph(
     ctx9 = cdlp(p2p_project_undirected_graph, max_round=10)
     r9 = (
         ctx9.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=int)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=int)
     )
     assert np.all(r9 == cdlp_result)
     assert np.all(
@@ -342,8 +386,8 @@ def test_app_on_undirected_graph(
     ctx10 = k_shell(p2p_project_undirected_graph, k=3)
     r10 = (
         ctx10.to_dataframe({"node": "v.id", "r": "r"})
-        .sort_values(by=["node"])
-        .to_numpy(dtype=int)
+            .sort_values(by=["node"])
+            .to_numpy(dtype=int)
     )
     assert np.all(r10 == kshell_result)
     assert np.all(

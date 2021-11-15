@@ -27,6 +27,7 @@
 #include "apps/lpa/lpa_u2i.h"
 #include "apps/property/auto_sssp_property.h"
 #include "apps/property/auto_wcc_property.h"
+#include "apps/property/dump_property.h"
 #include "apps/property/sssp_property.h"
 #include "apps/property/wcc_property.h"
 #include "apps/sampling_path/sampling_path.h"
@@ -199,6 +200,19 @@ void RunSSSP(std::shared_ptr<FragmentType> fragment,
   ostream.open(output_path);
   worker->Output(ostream);
   ostream.close();
+
+  worker->Finalize();
+}
+
+void RunDump(std::shared_ptr<FragmentType> fragment,
+             const grape::CommSpec& comm_spec, const std::string& out_prefix) {
+  using AppType = gs::DumpProperty<FragmentType>;
+  auto app = std::make_shared<AppType>();
+  auto worker = AppType::CreateWorker(app, fragment);
+  auto spec = grape::DefaultParallelEngineSpec();
+  worker->Init(comm_spec, spec);
+
+  worker->Query(out_prefix, false);
 
   worker->Finalize();
 }
@@ -465,6 +479,8 @@ void Run(vineyard::Client& client, const grape::CommSpec& comm_spec,
   } else if (app_name == "sampling_path") {
     RunSamplingPath(fragment, comm_spec, "./outputs_sampling_path/",
                     path_pattern);
+  } else if (app_name == "dump") {
+    RunDump(fragment, comm_spec, path_pattern);
   } else {
     if (!run_projected) {
       RunWCC(fragment, comm_spec, "./outputs_wcc/");

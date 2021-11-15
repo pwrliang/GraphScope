@@ -54,3 +54,4 @@ from graphscope.analytical.app.sssp import property_sssp
 from graphscope.analytical.app.sssp import sssp
 from graphscope.analytical.app.triangles import triangles
 from graphscope.analytical.app.wcc import wcc
+from graphscope.analytical.app.dump import property_dump

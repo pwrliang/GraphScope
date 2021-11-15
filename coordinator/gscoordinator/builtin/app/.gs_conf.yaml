@@ -1,8 +1,8 @@
 app:
   - algo: pagerank
     type: cpp_pie
-    class_name: grape::PageRankAuto
-    src: pagerank/pagerank_auto.h
+    class_name: grape::PageRank
+    src: pagerank/pagerank.h
     compatible_graph:
       - grape::ImmutableEdgecutFragment
       - gs::ArrowProjectedFragment
@@ -255,3 +255,9 @@ app:
     src: apps/centrality/betweenness/betweenness_centrality_generic.h
     compatible_graph:
       - gs::DynamicProjectedFragment
+  - algo: property_dump
+    type: cpp_pie
+    class_name: gs::DumpProperty
+    src: apps/property/dump_property.h
+    compatible_graph:
+      - vineyard::ArrowFragment
